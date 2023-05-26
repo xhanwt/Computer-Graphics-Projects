@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>The Mandelbrot Set - WebGL</title>
+
+<script>
+
+    "use strict";
+
+const  vertexShaderSource =
+    `precision highp float;
+    attribute vec2 a_Position;
+    attribute vec3 a_color;
+    varying vec3 v_color;
+
+    void main(){
+        gl_Position = vec4(a_Position.x, a_Position.y, 0.0, 1.0);
+        v_color = a_color;
+    }`;
+
+    const  fragmentShaderSource =`
+    precision highp float;
+ 
+    /* Point on the complex plane that will be mapped to the center of the screen */
+    uniform vec2 u_zoomCenter;
+    /* Distance between left and right edges of the screen. This essentially specifies
+    which points on the plane are mapped to left and right edges of the screen.
+    Together, u_zoomCenter and u_zoomSize determine which piece of the complex
+    plane is displayed. */
+    uniform float u_zoomSize;
+    /* How many iterations to do before deciding that a point is in the set. */
+    uniform int u_maxIterations;
+ 
+    vec2 f(vec2 x, vec2 c) {
+        return mat2(x,-x.y,x.x)*x + c;
+    }
+    /* Linearly interpolate between the four given colors. */
+    vec3 palette(float t, vec3 c1, vec3 c2, vec3 c3, vec3 c4) {
+        float x = 1.0 / 3.0;
+        if (t < x)
+            return mix(c1, c2, t/x);
+        else if (t < 2.0 * x)
+            return mix(c2, c3, (t - x)/x);
+        else if (t < 3.0 * x)
+            return mix(c3, c4, (t - 2.0*x)/x);
+        return c4;
+    }
+    void main() {
+        vec2 uv = gl_FragCoord.xy / vec2(800.0, 800.0);
+        /* Decide which point on the complex plane this fragment corresponds to.*/
+        vec2 c = u_zoomCenter + (uv * 4.0 - vec2(2.0)) * (u_zoomSize / 4.0);
+        /* Now iterate the function. */
+        vec2 x = vec2(0.0);
+        bool escaped = false;
+        int iterations = 0;   
+        for (int i = 0; i < 512; i++) {
+            if (i > u_maxIterations) break;
+            iterations = i;
+            x = f(x, c);
+            if (length(x) > 2.0) {
+                escaped = true;
+                break;
+            }
+        }
+        /* Usually, each point is assigned a color based on how many iterations it took
+        to detect that it doesn't belong to the set. A very straightforward approach
+        is to divide the actual number of iterations over the maximum number of
+        iterations. This will give us a value between 0 and 1, which can be used
+        directly to produce a grayscale image. */
+        gl_FragColor = escaped ? vec4(palette(float(iterations)/ float(u_maxIterations), vec3(0.02, 0.02, 0.03), vec3(0.1, 0.2, 0.3), vec3(0.0, 0.3, 0.2), vec3(0.0, 0.5, 0.8)), 1.0) : vec4(vec3(0.3, 0.5, 0.8), 1.0);
+    }`;
+    
+    //declare attributes and uniform location variables
+    let gl;
+    let attributePositionsLocation;
+    let bufferPositions;
+
+    let attributeColorLocation;
+    let bufferColor;
+
+    let u_zoomCenter_loc;
+    let u_zoomSize_loc;
+    let u_maxIterations_loc;
+
+    // Initialize variables with default values
+    // let zoomCenter = [-0.5, 0];
+    let zoomSize = 3;
+    let maxIterations = 100;
+
+    //   // Update variables based on user input - no renderer! :(
+    //   function updateVariables() {
+    //     zoomCenter[0] = parseFloat(document.getElementById("zoomCenterX").value);
+    //     zoomCenter[1] = parseFloat(document.getElementById("zoomCenterY").value);
+    //     zoomSize = parseFloat(document.getElementById("zoomSize").value);
+    //     maxIterations = parseInt(document.getElementById("maxIterations").value);
+    //     initGL();
+    //   }
+    
+
+    
+    function draw(){
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+
+        // Set up position attributes
+        const positions = new Float32Array([
+            -1.0, -1.0,
+            -1.0, 1.0,
+            1.0, 1.0,
+            1.0, -1.0,
+        ]);
+        bufferPositions = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, bufferPositions);
+        gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STREAM_DRAW); // Stream better as no update
+        gl.vertexAttribPointer(attributePositionsLocation, 2, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attributePositionsLocation); 
+
+        // Set up color attributes
+        const colors = new Float32Array([
+            0, 0, 1,
+            0, 1, 0,
+            1, 0, 0,
+            0, 0, 0,
+        ]);
+        bufferColor = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, bufferColor);
+        gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STREAM_DRAW);
+        gl.vertexAttribPointer(attributeColorLocation, 3, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attributeColorLocation);
+
+
+        // Draw as triangles
+        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);       
+    }
+
+    function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
+
+        let  vsh = gl.createShader( gl.VERTEX_SHADER );
+        gl.shaderSource( vsh, vertexShaderSource );
+        gl.compileShader( vsh );
+        if ( ! gl.getShaderParameter(vsh, gl.COMPILE_STATUS) ) {
+            throw new Error("Error in vertex shader:  " + gl.getShaderInfoLog(vsh));
+        }
+
+        let  fsh = gl.createShader( gl.FRAGMENT_SHADER );
+        gl.shaderSource( fsh, fragmentShaderSource );
+        gl.compileShader( fsh );
+        if ( ! gl.getShaderParameter(fsh, gl.COMPILE_STATUS) ) {
+           throw new Error("Error in fragment shader:  " + gl.getShaderInfoLog(fsh));
+        }
+
+        let  prog = gl.createProgram();
+        gl.attachShader( prog, vsh );
+        gl.attachShader( prog, fsh );
+        gl.linkProgram( prog );
+        if ( ! gl.getProgramParameter( prog, gl.LINK_STATUS) ) {
+           throw new Error("Link error in program:  " + gl.getProgramInfoLog(prog));
+        }
+        return prog;
+    }
+
+    /* Function initGL - initilize WebGL graphics context - only called once */
+    function initGL() {
+        let  prog = createProgram( gl, vertexShaderSource, fragmentShaderSource );
+        gl.useProgram(prog);
+
+        /* Get locations of uniforms and attributes. */
+        attributePositionsLocation = gl.getAttribLocation(prog, "a_Position");
+        attributeColorLocation = gl.getAttribLocation(prog, "a_color");
+
+        u_zoomCenter_loc = gl.getUniformLocation(prog, "u_zoomCenter");
+        u_zoomSize_loc = gl.getUniformLocation(prog, "u_zoomSize");
+        u_maxIterations_loc = gl.getUniformLocation(prog, "u_maxIterations");
+
+
+        gl.uniform2f(u_zoomCenter_loc, -0.5, 0.0); 
+        gl.uniform1f(u_zoomSize_loc, zoomSize);  
+        gl.uniform1i(u_maxIterations_loc, maxIterations);        
+
+    }
+
+    /**
+ * Initialize the program.  This function is called after the page has been loaded.
+ */
+function init() {
+    try {
+        let  canvas = document.getElementById("webglcanvas");
+        let  options = {  // no need for alpha channel or depth buffer in this program
+            alpha: false,
+            depth: false
+        };
+        gl = canvas.getContext("webgl", options);
+              // (Note that this page could use "webgl2" with no further modification.)
+        if ( ! gl ) {
+            throw "Browser does not support WebGL";
+        }
+    }
+    catch (e) {
+        document.getElementById("canvas-holder").innerHTML =
+            "<p>Sorry, could not get a WebGL graphics context.</p>";
+        return;
+    }
+    try {
+        //createData();
+        initGL();  // initialize the WebGL graphics context
+    }
+    catch (e) {
+        document.getElementById("canvas-holder").innerHTML =
+            "<p>Sorry, could not initialize the WebGL graphics context: " + e.message + "</p>";
+        return;
+    }
+    draw();    // draw the image
+}
+
+    window.onload = init;  // Arrange for init() to be called when the page has been loaded.
+
+    </script>
+</head>
+<body>
+
+<h2>The Mandelbrot Set</h2>
+
+<noscript><p><b>Sorry, but this page requires JavaScript.</b></p></noscript>
+<!-- <h1> Configurations </h1>
+<label for="zoomCenterX">Zoom Center X:</label>
+<input type="number" id="zoomCenterX" value="-0.5" step="0.1" onchange="updateVariables()"><br>
+<label for="zoomCenterY">Zoom Center Y:</label>
+<input type="number" id="zoomCenterY" value="0" step="0.1" onchange="updateVariables()"><br>
+<label for="zoomSize">Zoom Size:</label>
+<input type="number" id="zoomSize" value="3" step="0.1" onchange="updateVariables()"><br>
+<label for="maxIterations">Max Iterations:</label>
+<input type="number" id="maxIterations" value="100" step="10" onchange="updateVariables()"><br> -->
+
+<div id="canvas-holder">
+<canvas id="webglcanvas" width="800" height="800"></canvas> 
+</div>
+
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+
+<!--
+-->
+
+<head>
+<meta charset="UTF-8">
+<title>Lab 4</title>
+
+<script src="glsim.js"></script>  <!-- load the OpenGL 1.1 simulation code -->
+<script src="basic-object-models-IFS.js"></script>  <!-- some standard shapes for simulating glut -->
+
+<script>
+
+    "use strict";
+    
+    let camera;   // For setting up the view and implementing rotation by mouse.
+
+    // -------------------------- TODO: Complete this section ----------------------------------
+
+    let objectNumber = 1;  // Which object to draw (1 ,2, 3, or 4)?
+                           //   (Controlled by number keys.)
+    
+    /**
+     * The method that draws the current object, selected by value of objectNumber.
+     * The value of objectNumber is 1, 2, 3, or 4.
+     */
+    function draw() {
+        switch(objectNumber){
+            case 1:
+                object1();
+                break;
+            case 2:
+                object2();
+                break;
+            case 3: 
+                bar();
+                break;
+            case 4: 
+                square();
+                break;
+            default: 
+                break;
+        }
+    }
+    
+    /**
+     * Draws a cylinder with a sphere on each end, with its axis
+     * lying along the x-axis, centered at (0,0,0).
+     */
+    function bar() {
+
+        glRotatef(90,0,1,0);
+        glTranslatef(0,3,-3);
+
+        glPushMatrix();
+        glColor3f(1,1,0);
+        glutSolidSphere(1,32,32);
+        glPopMatrix();
+
+        //cylinder
+        glPushMatrix();
+        glColor3f(0.8,0,0.9);
+        glutSolidCylinder(0.3,6,32,8);
+        glPopMatrix();
+
+        //sphere
+        glPushMatrix();
+        glTranslatef(0,0,6.5);
+        glColor3f(1,1,0);
+        glutSolidSphere(1,32,32);
+        glPopMatrix();
+
+    }
+    
+    /**
+     * Draws an object shaped line a square with sides made of
+     * cylinders and a sphere at each corner, lying in the
+     * xy-plane, centered at (0,0,0). 
+     */
+    function square() {
+
+        glPushMatrix();
+        glTranslatef(0,2,0);
+        bar();    
+        glPopMatrix();
+
+
+        //first vertical cyliinder
+        glPushMatrix();
+        glColor3f(0.8,0,0.9);
+        glRotatef(90,1,0,0);
+        glTranslatef(-3,0,-5);
+        glutSolidCylinder(0.3,6,32,8);
+        glPopMatrix();
+
+        //second vertical cylinder
+        glPushMatrix();
+        glColor3f(0.8,0,0.9);
+        glRotatef(90,1,0,0);
+        glTranslatef(3.5,0,-5);
+        glutSolidCylinder(0.3,6,32,8);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(0,-4,0);
+        bar();    
+        glPopMatrix();
+
+    }
+
+    function object1()
+    {
+
+        glBegin(GL_TRIANGLE_STRIP); 
+        glColor3f(1,0,0); //red
+        glVertex2f(5,5);
+
+        glColor3f(0,1,0); //green
+        glVertex2f(-5,5);
+
+        glColor3f(0,0,1); //blue
+        glVertex2f(3,0);
+
+        glColor3f(1,0,0); //red
+        glVertex2f(-3,0);
+
+        glColor3f(0,1,0); //blue
+        glVertex2f(5,-5);
+
+        glColor3f(0,0,1); //red
+        glVertex2f(-5,-5);
+
+        glEnd();
+
+    }
+
+    function object2()
+    {
+
+        glRotatef(-90,1,0,0);
+
+        glPushMatrix(); 
+        glColor3f(0,1,0);
+        glutSolidCone(3.5,8,32);
+        glPopMatrix();
+
+        glPushMatrix();
+        glTranslatef(0,0,-2);
+        glColor3f(1.0, 0.5, 0.0);
+        glutSolidCylinder(1.5,5,32,8);
+        glPopMatrix();
+    }
+
+    
+
+
+    
+    //---------------- display() just sets up, then calls draw() to draw the scent ----
+    
+    function display() {
+        glClearColor(0,0,0,1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+ 
+        camera.apply(); // Let the camera set up the view and projection.
+        
+        glNormal3f(0,0,1); // (Make sure normal vector is correct for object 1.)
+       
+        draw();   // Draw the content of the scene.
+    }
+    
+    
+    //------------------ Some inefficient implementatin of glut functions -----------
+    
+    function glutSolidSphere(radius, slices, stacks) {
+        drawModel(uvSphere(radius, slices, stacks));
+    }
+    
+    function glutSolidCylinder(radius, height, slices, stacks) {
+        glPushMatrix();
+        glTranslatef(0,0,height/2);
+        drawModel(uvCylinder(radius, height, slices));
+        glPopMatrix();
+    }
+    
+    function glutSolidCone(radius, height, slices, stacks) {
+        glPushMatrix();
+        glTranslatef(0,0,height/2);
+        drawModel(uvCone(radius, height, slices, true));
+        glPopMatrix();
+    }
+    
+    /**
+     *  Draws a model using glDrawElements.  The model data must be in the format produced by
+     *  the functions in basic-object-models-IFS.js.
+     */
+    function drawModel(model) {
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3,GL_FLOAT,0,model.vertexPositions);
+        glEnableClientState(GL_NORMAL_ARRAY);
+        glNormalPointer(GL_FLOAT, 0, model.vertexNormals);
+        glDrawElements(GL_TRIANGLES, model.indices.length, GL_UNSIGNED_BYTE, model.indices);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+    }
+    
+    
+    // --------------- support for key events ----------------------------------------
+    
+    /**
+     * Set up in init() to be called when the user presses a key on the keyboard.
+     */
+    function doKeyDown(evt) {
+        let keyCode = evt.keyCode;  // code for the key that was pressed
+        console.log("pressed key with keyCode = ", keyCode);
+        if (keyCode >= 49 && keyCode <= 54) {
+           objectNumber = keyCode - 48;
+           display();
+           return;
+        }
+        if (keyCode == 36 || keyCode == 13) {
+           camera.lookAt(0,0,20);
+           display();
+           return;
+        }
+        
+        if (keyCode >=34 && keyCode <= 40) {
+            evt.preventDefault(); // Stop page from scrolling for arrow keys, home, end, pageup, pagedown.
+        }
+        draw();  // Redraw the picture to account for changes.
+    }
+    
+    
+    // ------------------------- initialization functions -----------------------------------
+    
+    /**
+     *  initGL() is called just once, by main(), to do initialization of OpenGL state
+     *  and other global state.
+     */
+    function initGL() {
+        glClearColor(0.0, 0.0, 0.0, 1.0); // background color
+        glEnable(GL_DEPTH_TEST);  // Required for 3D drawing, not usually for 2D.
+        glEnable(GL_LIGHTING);        // Enable lighting.
+        glEnable(GL_LIGHT0);          // Turn on a light.  By default, shines from direction of viewer.
+        glEnable(GL_NORMALIZE);       // OpenGL will make all normal vectors into unit normals
+        glEnable(GL_COLOR_MATERIAL);  // Material ambient and diffuse colors can be set by glColor*    
+        glLightModeli(GL_LIGHT_MODEL_TWO_SIDE, 1);  // Make OpenGL draw back sides of triangles.
+        glLineWidth(3); // Line width for the wireframe object.
+    }
+    
+    function init() {  // Called by <body onload="init()">, when the page has loaded.
+        try {
+            glsimUse("glcanvas"); // OpenGL will draw to the canvas with id="glcanvas".
+        }
+        catch (e) {
+            document.getElementById("canvas-holder").innerHTML =
+                "Sorry, an error occured:<br>" + e;
+            return;
+        }
+        initGL();
+        camera = new Camera();
+        camera.setScale(10);
+        camera.lookAt(0,0,20);
+        camera.installTrackball(display);
+        display();  // Call display() when the page is first loaded.
+        document.onkeydown = doKeyDown;
+     }
+
+    window.onload = init;
+</script>
+
+</head>
+
+<body>
+
+<h3>Lab 4</h3>
+
+<noscript>
+<p><b>Sorry, this page requires JavaScript!</b></p>
+</noscript>
+
+<p>Number keys 1 to 4 select object.<br>
+Drag on the drawing with your mouse or finger to rotate.<br>
+Home or return key restores original viewpoint.</p>
+
+<div id="canvas-holder">
+   <!-- You can set the size of the drawing area in the next line -->
+   <canvas id="glcanvas" width="700" height="700"></canvas>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,2 @@
+C:\Users\khosravis1\source\repos\OpenGLTest\x64\Debug\OpenGLTest.exe
+D:\Open GL\OpenGLTest\x64\Debug\OpenGLTest.exe

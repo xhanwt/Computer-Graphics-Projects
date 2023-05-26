@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<head>
+<meta charset="UTF-8">
+<title>Lab 7</title>
+<script src="three.js"></script>
+<script src="OrbitControls.js"></script>
+<script src="GLTFLoader.js"></script>
+<script>
+
+"use strict";
+
+let canvas, renderer, scene, camera; // Standard three.js requirements.
+
+let controls;  // An OrbitControls object that is used to implement
+               // rotation of the scene using the mouse.  (It actually rotates
+               // the camera around the scene.)
+
+let animating = false;  // Set to true when an animation is in progress.
+let frameNumber = 0;  // Actually elapsed time in animation, in units of 1/60 second.
+
+let merryGoRound;  // an Object3D, for rotating the whole merry-go-round
+let horseGroup1;   // an Object3D for moving one group of horses up and down
+let horseGroup2;   // an Object3D for moving the other group of horses up and down
+
+
+/**
+ *  The render function draws the scene.
+ */
+function render() {
+    renderer.render(scene, camera);
+}
+
+
+/**
+ * This function is called by the init() method to create the world. 
+ */
+function createWorld() {
+    
+    renderer.setClearColor("black"); // Background color for scene.
+    scene = new THREE.Scene();
+    
+    // ------------------- Make a camera with viewpoint light ----------------------
+    
+    scene.add(new THREE.AmbientLight(0x202020));  // Add some ambient illumination.
+	// TODO: Add a directional light at position (0,1,0)
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+    dirLight.position.set(0, 1, 0);
+    scene.add(dirLight);
+
+    // TODO: Add a point light to illuminate the merry-go-round from inside
+    const pointLight = new THREE.PointLight(0xffffff, 1, 100);
+    pointLight.position.set(0, 10, 0);
+    scene.add(pointLight);
+
+    camera = new THREE.PerspectiveCamera(30, canvas.width/canvas.height, 0.1, 100);
+    camera.position.z = 30;
+    let light;  // A light shining from the direction of the camera; moves with the camera.
+    light = new THREE.DirectionalLight();
+    light.position.set(0,0,1);
+    camera.add(light); // so light will move with camera (which is moved by the OrbitControls)
+    scene.add(camera);
+    
+    //------------------- Create the scene's visible objects ----------------------
+    
+
+    // TODO: Add all of the required objects to the scene.
+  
+    // ------------------- Build merry-go-round ----------------------
+    merryGoRound = new THREE.Object3D();
+
+  
+  // Make the top and bottom cylinders
+    let cylinderGeometry = new THREE.CylinderGeometry(10, 10, 0.3, 64);
+    let cylinderMaterial = new THREE.MeshPhongMaterial({color: 0xffff00});
+  
+    let topCylinder = new THREE.Mesh(cylinderGeometry, cylinderMaterial);
+    topCylinder.position.y = 4;
+    merryGoRound.add(topCylinder);
+  
+    let bottomCylinder = topCylinder.clone();
+    bottomCylinder.position.y = -4;
+    merryGoRound.add(bottomCylinder);
+
+
+    // Cone above top cylinder
+    const cone = new THREE.Mesh(
+        new THREE.ConeGeometry(10, 3, 64),
+        new THREE.MeshPhongMaterial({ color: 0xffff00,
+                                     shininess: 0,
+                                     emissive: "black",
+                                    })
+    );
+    cone.position.set(0, 5.5, 0);
+    merryGoRound.add(cone);
+
+
+    // Poles
+    let poleGeometry = new THREE.CylinderGeometry(0.1, 0.1, 8, 64);
+    let poleMaterial = new THREE.MeshPhongMaterial( { color: 0xffffff } );
+    let pole = new THREE.Mesh(poleGeometry, poleMaterial);
+    for (let i = 0; i < 8; i++) {
+        let ipole =  pole.clone();
+        pole.position.y = 0;
+        let poleHolder = new THREE.Object3D();
+        poleHolder.rotation.y = i * Math.PI / 4;
+        poleHolder.add(ipole);
+      
+        poleHolder.translateZ(9.5);
+        merryGoRound.add(poleHolder);
+    }
+  
+    // Globe
+    const geometryGlobe = new THREE.SphereGeometry( 3, 64, 64 );
+    const materialGlobe = new THREE.MeshBasicMaterial( { color: 0xffffff } );
+    const globe = new THREE.Mesh( geometryGlobe, materialGlobe );
+    merryGoRound.add( globe );
+  
+
+    // Add the merry-go-round to the scene
+    scene.add(merryGoRound);
+
+
+    // Load horse model
+
+    let loader = new THREE.GLTFLoader();
+    loader.load("https://cdn.glitch.global/cdb15618-7cfb-41d0-8a16-bdd91da34209/Horse.glb?v=1678431724666", addHorsesToScene);
+  
+
+    // ---- Start loading of textures; they will be applied when they are loaded --------
+    
+    loadTextureFor("https://cdn.glitch.global/cdb15618-7cfb-41d0-8a16-bdd91da34209/earth.jpg?v=1678417412815", globe);
+    loadTextureFor("https://cdn.glitch.global/cdb15618-7cfb-41d0-8a16-bdd91da34209/paisley.jpg?v=1678417414958", pole);
+  
+    loadTextureFor("https://cdn.glitch.global/17c63fbd-6dc8-4bca-a5e0-0ed5721b46a0/wall_wallpaper_pattern02-m-color.jpg?v=1678485347610", cone);
+    loadTextureFor("https://cdn.glitch.global/17c63fbd-6dc8-4bca-a5e0-0ed5721b46a0/fabric_patterned_2-l-color.jpg?v=1678485125859", topCylinder);
+    
+  
+} // end function createWorld()
+
+
+/**
+ *  This function is called once for each frame of the animation, before
+ *  the render() function is called for that frame.  It updates any
+ *  animated properties.  The value of the global variable frameNumber
+ *  is actually the elapsed time in the animation, in units of 1/60 seconds.
+ */
+function updateForFrame() {
+    horseGroup1.position.y = 0.9*Math.sin(frameNumber / 25);
+    horseGroup2.position.y = -0.9*Math.sin(frameNumber / 25);
+    horseGroup1.rotation.y = -frameNumber / 60;
+    horseGroup2.rotation.y = -frameNumber / 60;
+    merryGoRound.rotation.y = -frameNumber / 60;
+}    
+
+  
+  
+// TODO: complete this function
+function addHorsesToScene(data) {
+
+    horseGroup1 = new THREE.Object3D();
+    horseGroup2 = new THREE.Object3D();
+  
+  // get the original horse
+let horse = data.scene.children[0];
+
+// set the horse's scale and position
+horse.scale.set(0.02, 0.02, 0.02);
+horse.position.set(0, -2, 9.5);
+horse.rotation.y = -Math.PI / 2;
+
+
+
+// Brown Horse
+for (let i = 0; i < 4; i++) {
+  let brownHorse = horse.clone();
+  let horseHolder = new THREE.Object3D();
+
+  horseHolder.rotation.y = i * Math.PI / 2;
+  horseHolder.add(brownHorse);
+
+  // add the cloned horse to the group
+  horseGroup1.add(horseHolder);
+  
+  
+}
+scene.add(horseGroup1);
+
+// Color Horse
+for (let i = 0; i < 4; i++) {
+  let colorHorse = horse.clone();
+  let horseHolder = new THREE.Object3D();
+
+  let colors = [ 0x0000ff,  0xff0000,  0x00ff00,  0xff00ff];
+
+  colorHorse.material = new THREE.MeshLambertMaterial({ color: colors[i] });
+
+  horseHolder.rotation.y = (i * Math.PI / 2) + (Math.PI/4);
+  horseHolder.add(colorHorse);
+
+  // add the cloned horse to the group
+  horseGroup2.add(horseHolder);
+  
+  
+}
+scene.add(horseGroup2);
+
+  
+loadTextureFor("https://cdn.glitch.global/17c63fbd-6dc8-4bca-a5e0-0ed5721b46a0/fabric_patterned_2-l-color.jpg?v=1678485125859", horseGroup2);
+    
+
+
+}
+
+  
+/**
+ * Start loading a texture from imageURL.  If additional parameeters are
+ * present, they must be THREE.Object3D's, and the map property of each
+ * object's material is set to the newly loaded texture.  The return
+ * value of the function is the texture, to allow it to be used elsewhere.
+ */
+function loadTextureFor(imageURL, ...objects) {
+    function callback() {
+        for (let object of objects) {
+            object.material.map = texture;
+            object.material.needsUpdate = true;
+        }
+        render();  // render scene with texture that has just been loaded.
+    }
+    let loader = new THREE.TextureLoader();
+    let texture = loader.load(imageURL, callback);
+    return texture;
+}
+
+
+/* ---------------------------- ANIMATION SUPPORT --------------------- */
+
+let previousTime; // time when doFrame was last called
+const audio = new Audio("https://cdn.glitch.global/17c63fbd-6dc8-4bca-a5e0-0ed5721b46a0/Carousel-sound-effect.mp3?v=1678486243084");
+audio.loop = true;
+
+  
+/*  Called when user changes setting of the Animate checkbox. */
+function doAnimateCheckbox() {
+   let run = document.getElementById("animateCheckbox").checked;
+  
+  
+   if (run) {
+        audio.play();
+    } else {
+        audio.pause();
+        audio.currentTime = 0; // reset audio to the beginning
+    }
+  
+   if (run != animating) {
+       animating = run;
+     
+       if (animating) {
+           previousTime = -1; // for starting or restarting the animation
+           requestAnimationFrame(doFrame);
+       }
+   }
+}
+
+/*  Drives the animation, called by system through requestAnimationFrame() */
+function doFrame() {
+    if (animating) {
+        let time = Date.now();
+        if (previousTime !== -1) {
+            let elapsedTime = (time - previousTime)/1000; // time in seconds since previous frame
+            frameNumber += elapsedTime*60; // elapsed time in units of 1/60 seconds
+            updateForFrame();
+            render();
+        }
+        previousTime = time;
+        requestAnimationFrame(doFrame);
+    }
+}
+
+/*----------------------------- INITIALIZATION ----------------------------------------
+
+/**
+ *  This function is called by the onload event so it will run after the
+ *  page has loaded.  It creates the renderer, canvas, and scene objects,
+ *  calls createWorld() to add objects to the scene, and renders the
+ *  initial view of the scene.  If an error occurs, it is reported.
+ */
+function init() {
+    try {
+        canvas = document.getElementById("glcanvas");
+        renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true,
+            alpha: false
+        });
+    }
+    catch (e) {
+        document.getElementById("message").innerHTML="<b>Sorry, an error occurred:<br>" +
+                e + "</b>";
+        return;
+    }
+    document.getElementById("animateCheckbox").checked = false;
+    document.getElementById("animateCheckbox").onchange = doAnimateCheckbox;
+    document.getElementById("reset").onclick = function() { controls.reset(); };
+    createWorld();
+    controls = new THREE.OrbitControls(camera,canvas);
+    controls.enablePan = false; 
+    controls.enableZoom = false;
+    controls.addEventListener("change", render);
+    render();
+}
+
+window.onload = init;  // arrange for init() to be called when the page loads.
+
+</script>
+</head>
+<body>
+
+<h2>Lab 7 - Carousel</h2>
+
+<noscript>
+   <p style="color: #AA0000; font-weight: bold">Sorry, but this page requires JavaScript!</p>
+</noscript>
+
+<p style="color:#AA0000; font-weight: bold" id="message">
+</p>
+
+<p><b style="margin-left:50px">Use your mouse to rotate the model.</b></p>
+
+<p>
+   <label><input type="checkbox" id="animateCheckbox" style="margin-left:50px"><b>Animate</b></label>
+   <button style="margin-left: 50px" id="reset">Reset Rotation</button>
+</p>
+
+<div id="canvas-holder" style="float: left; background-color: black">
+   <canvas width=1000 height=600 id="glcanvas"></canvas>
+</div>
+
+</body>
+</html>
